@@ -16,6 +16,21 @@ const nextConfig: NextConfig = {
       { hostname: "res.cloudinary.com" },
     ],
   },
+  webpack: (config, { isServer, webpack }) => {
+    if (!isServer) {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        sharp$: false,
+        "onnxruntime-node$": false,
+      };
+      config.plugins.push(
+        new webpack.IgnorePlugin({
+          resourceRegExp: /^onnxruntime-node$|^node:/,
+        })
+      );
+    }
+    return config;
+  },
 };
 
 export default nextConfig;

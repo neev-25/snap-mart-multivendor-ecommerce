@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
         detectedCategory: result.detectedCategory,
         topScore: result.topScore,
         products: result.products.map((r) => ({
-          ...r.product,
+          ...(r.product ?? {}),
           visualScore: r.score,
         })),
       });
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
       detectedCategory: result.detectedCategory,
       topScore: result.topScore,
       products: result.products.map((r) => ({
-        ...r.product,
+        ...(r.product ?? {}),
         visualScore: r.score,
       })),
     });
