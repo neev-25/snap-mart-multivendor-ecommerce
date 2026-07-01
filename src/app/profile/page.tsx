@@ -4,7 +4,7 @@ import { AppDispatch, RootState } from '@/redux/store'
 import { AnimatePresence, motion } from 'motion/react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import React, { ChangeEvent, useState } from 'react'
+import React, { ChangeEvent, useEffect, useState } from 'react'
 import { AiOutlineUser, AiOutlineMail, AiOutlineCalendar } from 'react-icons/ai'
 import { useDispatch, useSelector } from 'react-redux'
 import userImage from '@/assets/userpng.png'
@@ -27,6 +27,16 @@ function Profile() {
     const [gstNumber,setGSTNumber]=useState(user?.gstNumber||"")
     const [loading,setLoading]=useState(false)
     const dispatch=useDispatch<AppDispatch>()
+
+    useEffect(() => {
+        if (!user) return
+        setName(user.name || '')
+        setPhone(user.phone || '')
+        setShopName(user.shopName || '')
+        setShopAddress(user.shopAddress || '')
+        setGSTNumber(user.gstNumber || '')
+        if (user.image) setPreviewImage(user.image)
+    }, [user])
     
     const handlePreviewImage=(e:React.ChangeEvent<HTMLInputElement>)=>{
         const file=e.target?.files?.[0]
@@ -87,12 +97,12 @@ function Profile() {
         }
       }
     return (
-        <div className='min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white px-4 pt-24 pb-10 '>
+        <div className='app-container flex justify-center'>
             <motion.div 
-                initial={{ scale: 0.95, opacity: 0 }}
+                initial={{ scale: 0.98, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                transition={{ duration: 0.4}}
-                className='max-w-3xl mx-auto  bg-white/10 backdrop-blur-md p-6 sm:p-10 rounded-2xl border border-white/20 shadow-xl'
+                transition={{ duration: 0.35 }}
+                className='glass-card-strong w-full max-w-3xl p-6 sm:p-10'
             >
                 <div className='flex flex-col items-center text-center'>
                     {/* Profile Image Wrapper */}
@@ -177,12 +187,12 @@ function Profile() {
                             </label>
                         </div>
                         <div className='space-y-4'>
-                            <input type="text" className='w-full p-3 bg-white/10 border border-white/20 rounded'
+                            <input type="text" className='input-field'
                             placeholder='full Name'
                             onChange={(e)=>setName(e.target.value)}
                             value={name}
                             />
-                            <input type="text" className='w-full p-3 bg-white/10 border border-white/20 rounded'
+                            <input type="text" className='input-field'
                             placeholder='Phone no'
                             onChange={(e)=>setPhone(e.target.value)}
                             value={phone}
@@ -191,7 +201,7 @@ function Profile() {
                             <motion.button
                             disabled={loading}
                         whileHover={{scale:1.02}}
-                        className='bg-blue-600 w-full hover:bg-blue-700 py-3 rounded-lg font-semibold'
+                        className='btn-primary w-full py-3 font-semibold'
                         onClick={handleUpdateProfile}
                         >
                             {loading ? <ClipLoader size={20} color='white'/>:"Update Profile"}
@@ -211,18 +221,18 @@ function Profile() {
                     className='mt-10 bg-white/5 p-5 sm:p-6 rounded-xl border border-white/20'>
                         <h3 className='text-xl font-bold mb-5 p-8'>Edit Shop Details</h3>
                         <div className='space-y-4'>
-                            <input type="text" className='w-full p-3 bg-white/10 border border-white/20 rounded'
+                            <input type="text" className='input-field'
                             placeholder='Shop Name'
                             onChange={(e)=>setShopName(e.target.value)}
                             value={shopName}
                             />
-                            <input type="text" className='w-full p-3 bg-white/10 border border-white/20 rounded'
+                            <input type="text" className='input-field'
                             placeholder='Shop Address'
                             onChange={(e)=>setShopAddress(e.target.value)}
                             value={shopAddress}
 
                             />
-                            <input type="text" className='w-full p-3 bg-white/10 border border-white/20 rounded'
+                            <input type="text" className='input-field'
                             placeholder='GSTIN'
                             onChange={(e)=>setGSTNumber(e.target.value)}
                             value={gstNumber}
@@ -230,7 +240,7 @@ function Profile() {
                             />
                             <motion.button
                         whileHover={{scale:1.02}}
-                        className='bg-blue-600 w-full hover:bg-blue-700 py-3 rounded-lg font-semibold'
+                        className='btn-primary w-full py-3 font-semibold'
                         onClick={handleVerifyAgain}
                         disabled={loading}
                         >

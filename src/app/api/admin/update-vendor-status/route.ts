@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import connectDb from "@/lib/connectDB";
+import { notifyVendorStatusChange } from "@/lib/notifyHelpers";
 import User from "@/model/user.model";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -17,8 +18,11 @@ export async function POST(req:NextRequest) {
         {
             return NextResponse.json({message:"vendorId and status are required"},{status:400})
         }
-        const vendor=await User.findById(vendorId)
-        
+        const vendor = await User.findById(vendorId);
+        if (!vendor) {
+            return NextResponse.json({ message: "Vendor not found" }, { status: 404 });
+        }
+
         if(status==="approved")
         {
             vendor.verificationStatus="approved",
@@ -33,6 +37,12 @@ export async function POST(req:NextRequest) {
             vendor.rejectedReason=rejectedReason|| "rejected by admin"
         }
         await vendor.save()
+
+        void notifyVendorStatusChange(
+            vendorId,
+            status as "approved" | "rejected",
+            rejectedReason
+        )
 
        return NextResponse.json({message:"vendor status updated",vendor},{status:200})
     } catch (error) {

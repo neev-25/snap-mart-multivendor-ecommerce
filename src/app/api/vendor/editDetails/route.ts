@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import connectDb from "@/lib/connectDB";
+import { notifyNewVendorRequest } from "@/lib/notifyHelpers";
 import User from "@/model/user.model";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -24,6 +25,9 @@ export async function POST(req:NextRequest) {
         {
             return NextResponse.json({message:'User is not found'},{status:400})
         }
+
+        void notifyNewVendorRequest(user._id.toString())
+
         return NextResponse.json({message:"vendor details submitted successfully",user},{status:200})
     } catch (error) {
         return NextResponse.json({message:`edit vendor details error ${error}`},{status:500})

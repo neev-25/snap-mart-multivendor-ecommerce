@@ -23,6 +23,11 @@ export interface IUser{
         product:mongoose.Types.ObjectId;
         quantity:number;
     }[];
+    wishlist?:mongoose.Types.ObjectId[];
+    followingVendors?:mongoose.Types.ObjectId[];
+
+    resetPasswordToken?:string;
+    resetPasswordExpires?:Date;
 
     chats?:{
         with:mongoose.Types.ObjectId;
@@ -49,7 +54,8 @@ const userSchema=new mongoose.Schema<IUser>({
     },
     password:{
         type:String,
-        required:true,
+        required:false,
+        default:"",
     },
     image:{
         type:String
@@ -107,6 +113,20 @@ const userSchema=new mongoose.Schema<IUser>({
             default:1
         }
     }],
+    wishlist:[{
+        type:mongoose.Schema.Types.ObjectId,
+        ref:"Product"
+    }],
+    followingVendors:[{
+        type:mongoose.Schema.Types.ObjectId,
+        ref:"User"
+    }],
+    resetPasswordToken:{
+        type:String,
+    },
+    resetPasswordExpires:{
+        type:Date,
+    },
     chats:[
         {
             with:{

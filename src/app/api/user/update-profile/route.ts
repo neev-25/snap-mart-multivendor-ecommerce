@@ -29,7 +29,7 @@ export async function POST(req:NextRequest) {
             name,
             phone,
             image:imageUrl
-        },{new:true})
+        },{ returnDocument: "after" })
         if(!UpdatedUser)
         {
             return NextResponse.json({message:"User is not found"},{status:400})

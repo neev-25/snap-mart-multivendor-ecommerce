@@ -113,10 +113,10 @@ const [selectedVendor,setSelectedVendor]=useState<IUser|null>(null)
           >
           <h3 className='text-xl sm:text-2xl font-bold mb-4'>Products of {selectedVendor.shopName}</h3>
 
-          {selectedVendor.vendorProducts?.length ?
+          {Array.isArray(selectedVendor.vendorProducts) && selectedVendor.vendorProducts.length ?
           (
           <div className='space-y-4 max-h-[400px] overflow-y-auto pr-2'>
-            {selectedVendor.vendorProducts.map((p:any,i:number)=>(
+            {(selectedVendor.vendorProducts as any[]).map((p:any,i:number)=>(
               <div key={i} className='bg-white/10 p-4 rounded-lg border border-white/20'>
               <div className='flex gap-3 items-center'>
                 <Image src={p.image1} alt='img' 

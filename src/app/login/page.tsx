@@ -1,112 +1,147 @@
 'use client'
 import React, { useState } from 'react'
-import { AnimatePresence, motion } from 'motion/react';
-import { useRouter } from 'next/navigation';
-import { FaEye, FaEyeSlash } from 'react-icons/fa';
-import { ClipLoader } from 'react-spinners';
-import { FcGoogle } from 'react-icons/fc';
-import { GoChevronRight } from 'react-icons/go';
-import { signIn, useSession } from 'next-auth/react';
+import { AnimatePresence, motion } from 'motion/react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { FaEye, FaEyeSlash } from 'react-icons/fa'
+import { ClipLoader } from 'react-spinners'
+import { FcGoogle } from 'react-icons/fc'
+import { GoChevronRight } from 'react-icons/go'
+import { signIn } from 'next-auth/react'
+import { showToast } from '@/component/ui/ToastProvider'
+import { Suspense } from 'react'
 
 const SignIn = () => {
-   const [email,setEmail]=useState("")
-      const [password,setPassword]=useState("")
-      const [showPassword,setShowPassword]=useState(false)
-      const router=useRouter()
-      const [loading,setLoading]=useState(false)
-      const session=useSession()
-      console.log(session.data?.user)
-      const handleSignIn=async (e:React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault()
-        setLoading(true)
-        try {
-          const result=await signIn("credentials",{
-            email,
-            password,
-            redirect:false
-          })
-          alert("SignIn Successfully")
-          router.push("/")
-          setLoading(false)
-        } catch (error) {
-          console.log(error)
-          setLoading(false)
-          alert(error)
-        }
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const callbackUrl = searchParams.get('callbackUrl') || '/'
+  const [loading, setLoading] = useState(false)
+
+  const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const result = await signIn('credentials', { email, password, redirect: false })
+      if (result?.error) {
+        showToast('Sign in failed. Check email and password.', 'error')
+        return
       }
+      showToast('Signed in successfully')
+      router.push(callbackUrl)
+    } catch (error) {
+      console.log(error)
+      showToast('Sign in failed', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
-    <div className='min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white p-6'>
+    <div className="flex min-h-screen items-center justify-center bg-[#0a0a0f] px-4 py-10">
       <AnimatePresence>
-      
-      <motion.div
-      className='w-full max-w-md bg-white/10 backdrop-blur-md rounded-2xl shadow-2xl p-8 border border-white/20'
-      initial={{opacity:0,y:40}}
-      animate={{opacity:1,y:0}}
-      exit={{opacity:0,y:-40}}
-      transition={{duration:0.5}}
-      >
-        <h1 className='text-2xl font-semibold text-center mb-6 text-gray-100'>Welcome Back to <span className='text-blue-400'>SnapMart</span></h1>
-        <form 
-        onSubmit={handleSignIn}
-        className='flex flex-col gap-4'
+        <motion.div
+          className="glass-card-strong w-full max-w-md p-6 sm:p-8"
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -24 }}
+          transition={{ duration: 0.4 }}
         >
-            <input type="text" 
-            required
-            placeholder='Email'
-            className='bg-white/10 border border-white/30 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500'
-            onChange={(e)=>setEmail(e.target.value)}
-            value={email}
+          <div className="mb-8 text-center">
+            <h1 className="text-2xl font-bold text-white sm:text-3xl">Welcome back</h1>
+            <p className="mt-2 text-sm text-gray-400">
+              Sign in to your <span className="text-blue-400">SnapMart</span> account
+            </p>
+          </div>
+
+          <form onSubmit={handleSignIn} className="flex flex-col gap-4">
+            <input
+              type="email"
+              required
+              placeholder="Email address"
+              className="input-field"
+              onChange={(e) => setEmail(e.target.value)}
+              value={email}
             />
-            <input 
-            type={showPassword?"text":"password"}
-            required
-            placeholder='Password'
-            className='bg-white/10 border relative border-white/30 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500'
-            onChange={(e)=>setPassword(e.target.value)}
-            value={password}
-            />
-            <button 
-            type='button'
-            onClick={()=>setShowPassword(!showPassword)}
-            className='absolute cursor-pointer right-12 top-45 -translate-y-1/2 text-gray-400 hover:text-white transition'>
-                {showPassword?<FaEyeSlash size={18}/>:<FaEye size={18}/>}
-                </button>
-                <motion.button
-                disabled={loading}
-                type='submit'
-                className='mt-4 px-8 py-3 flex items-center justify-center gap-2  bg-blue-400 hover:bg-blue-500 rounded-xl font-medium w-full'
-                whileHover={{scale:1.03}}
-                whileTap={{scale:0.95}}
-                >
-                {loading ? <ClipLoader size={20}color='white'/>:"Login"}
-                </motion.button>
-        <div className='flex items-center my-3'>
-            <div className='flex-1 h-px bg-gray-600'></div>
-            <span className='px-3 text-sm text-gray-400'>or</span>
-            <div className='flex-1 h-px bg-gray-600'></div>
-        </div>
-                <motion.button
-                onClick={()=>signIn("google",{callbackUrl:"/"})}
-                className='flex items-center justify-center gap-3 py-3 bg-white/10 hover:bg-white/20 border border-white/30 rounded-xl transition'
-                whileHover={{scale:1.03}}
-                whileTap={{scale:0.95}}
-                >
-                <FcGoogle className='w-5 h-5'/>
-                <span className='font-medium'>Continue with Google</span><GoChevronRight/>
-                </motion.button>
-                <p className='text-center text-sm mt-4 text-gray-400'>
-                    No have Account {"?"} Create an Account{"."}
-                    <span 
-                    onClick={()=>router.push("/register")}
-                    className='text-blue-400 cursor-pointer hover:underline hover:text-blue-300 transition'>
-                        Register
-                    </span>
-                </p>
-        </form>
-      </motion.div>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                placeholder="Password"
+                className="input-field pr-11"
+                onChange={(e) => setPassword(e.target.value)}
+                value={password}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <FaEyeSlash size={18} /> : <FaEye size={18} />}
+              </button>
+            </div>
+
+            <motion.button
+              disabled={loading}
+              type="submit"
+              className="btn-primary mt-2 w-full py-3"
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              {loading ? <ClipLoader size={20} color="white" /> : 'Sign In'}
+            </motion.button>
+
+            <div className="flex items-center gap-3 py-1">
+              <div className="h-px flex-1 bg-white/10" />
+              <span className="text-xs text-gray-500">or</span>
+              <div className="h-px flex-1 bg-white/10" />
+            </div>
+
+            <motion.button
+              type="button"
+              onClick={() => signIn('google', { callbackUrl })}
+              className="btn-secondary w-full py-3"
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <FcGoogle className="h-5 w-5" />
+              Continue with Google
+              <GoChevronRight />
+            </motion.button>
+
+            <p className="text-center text-sm text-gray-400">
+              <button
+                type="button"
+                onClick={() => router.push('/forgot-password')}
+                className="font-medium text-blue-400 hover:underline"
+              >
+                Forgot password?
+              </button>
+            </p>
+
+            <p className="text-center text-sm text-gray-400">
+              Don&apos;t have an account?{' '}
+              <button
+                type="button"
+                onClick={() => router.push('/register')}
+                className="font-medium text-blue-400 hover:underline"
+              >
+                Register
+              </button>
+            </p>
+          </form>
+        </motion.div>
       </AnimatePresence>
     </div>
   )
 }
 
-export default SignIn
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center text-gray-400">Loading…</div>}>
+      <SignIn />
+    </Suspense>
+  )
+}

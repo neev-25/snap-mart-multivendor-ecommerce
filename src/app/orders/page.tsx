@@ -8,24 +8,28 @@ import { useDispatch, useSelector } from 'react-redux'
 import { motion } from 'motion/react';
 import axios from 'axios'
 import { setAllOrdersData } from '@/redux/userSlice'
+import { formatINR, getMaxReplacementDays, getOrderSettlement } from '@/lib/orderFinances'
+import { getOrderDisplayId } from '@/lib/orderDisplay'
+import { useKeyedActionLock } from '@/hooks/useActionLock'
+import { showToast } from '@/component/ui/ToastProvider'
+import { ClipLoader } from 'react-spinners'
 
 function Orders() {
   UseGetAllOrdersData()
   UseGetCurrentUser()
-  const {userData}=useSelector((state:RootState)=>state.user)
   const {allOrdersData}=useSelector((state:RootState)=>state.user)
   const [selectedOrder,setSelectedOrder]=useState<any|null>(null)
   const [trackOrderModel,setTrackOrderModel]=useState<any|null>(null)
+  const { run: runOrderAction, isBusy } = useKeyedActionLock()
 
 
-  const orders=Array.isArray(allOrdersData)?
-  allOrdersData.filter((o)=>String(o.buyer._id)===String(userData?._id)) : []
+  const orders=Array.isArray(allOrdersData)? allOrdersData : []
   
   if(!orders)
   {
     return (
-      <div className='min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-black to-gray-900 text-4xl text-white p-6'>
-        Loading Orders...
+      <div className='app-container flex min-h-[50vh] items-center justify-center text-gray-400'>
+        Loading orders...
       </div>
     )
   }
@@ -48,42 +52,47 @@ function Orders() {
 
   const isCancelDisable=(order:any)=> order.isPaid===true && order.paymentMethod==="stripe"
   
-  const status=["pending","confirmed","shipped","delivered"];
-  const renderTrackStep=(currentStatus:string)=>{
+  const status = ['pending', 'confirmed', 'shipped', 'delivered']
+  const renderTrackStep = (currentStatus: string) => {
+    const currentIndex = status.indexOf(currentStatus)
     return (
       <div className='relative pl-6'>
-      <div className='absolute top-0 left-8 w-[1px] h-full  bg-gray-600'> </div>
-        {status.map((s,i)=>{
-          const active=currentStatus===s
-          return(
-            <div
-            key={i}
-            className='relative mb-6 flex items-start'
-            >
-              {/* dot */}
-              <div className={`
-                w-4 h-4 rounded-full ${active?"bg-blue-500 shadow-lg shadow-blue-500/50":"bg-gray-500"}
-                `}></div>
-                <div className='ml-4 text-sm'>{s.toUpperCase()}</div>
+        <div className='absolute top-0 left-8 w-[1px] h-full bg-gray-600' />
+        {status.map((s, i) => {
+          const reached = currentIndex >= 0 && i <= currentIndex
+          return (
+            <div key={i} className='relative mb-6 flex items-start'>
+              <div
+                className={`w-4 h-4 rounded-full ${
+                  reached
+                    ? 'bg-blue-500 shadow-lg shadow-blue-500/50'
+                    : 'bg-gray-500'
+                }`}
+              />
+              <div className={`ml-4 text-sm ${reached ? 'text-white' : 'text-gray-500'}`}>
+                {s.toUpperCase()}
+              </div>
             </div>
           )
         })}
-     
       </div>
     )
   }
 
   const handleCancel=async (orderId:string) => {
-    try {
-      await axios.post("/api/order/cancelOrder",{orderId})
-      const updatedOrder=allOrdersData.map((o:any)=>o._id===orderId ? {...o,orderStatus:"cancelled"}:o)
-      dispatch(setAllOrdersData(updatedOrder))
-      alert("Order Cancelled")
-      setSelectedOrder(null)
-    } catch (error) {
-      console.log(error)
-      alert("Order Cancel error")
-    }
+    await runOrderAction(`cancel-${orderId}`, async () => {
+      try {
+        await axios.post("/api/order/cancelOrder",{orderId})
+        const updatedOrder=allOrdersData.map((o:any)=>String(o._id)===String(orderId) ? {...o,orderStatus:"cancelled"}:o)
+        dispatch(setAllOrdersData(updatedOrder))
+        showToast("Order cancelled")
+        setSelectedOrder(null)
+      } catch (error: unknown) {
+        const err = error as { response?: { data?: { message?: string } } }
+        showToast(err?.response?.data?.message || "Could not cancel order", "error")
+        throw error
+      }
+    })
   }
 
   const isEligibleReturn=(deliveryDate:string,replacementDays:number)=>
@@ -125,34 +134,43 @@ function Orders() {
   }
 
   const returnOrder=async (orderId:string) => {
-    try {
-      const result=await axios.post("/api/order/return",{orderId})
-      const updatedOrder=allOrdersData.map((o:any)=>o._id===orderId ? {...o,orderStatus:"returned",returnedAmount:result.data.returnedAmount}:o)
-      dispatch(setAllOrdersData(updatedOrder))
-      alert("Order returned")
-      setSelectedOrder(null)
-    } catch (error) {
-      console.log(error) 
-      alert("Order returned error")
-    }
+    await runOrderAction(`return-${orderId}`, async () => {
+      try {
+        const result=await axios.post("/api/order/return",{orderId})
+        const returned = result.data.order
+        const updatedOrder=allOrdersData.map((o:any)=>String(o._id)===String(orderId) ? {
+          ...o,
+          orderStatus:"returned",
+          returnedAmount: returned.returnedAmount,
+          refundedCommission: returned.refundedCommission,
+          refundedVendorAmount: returned.refundedVendorAmount,
+          returnedAt: returned.returnedAt,
+        }:o)
+        dispatch(setAllOrdersData(updatedOrder))
+        const refund = result.data.settlement?.customerRefund ?? returned.returnedAmount
+        showToast(`Return processed — refund ${formatINR(refund)}`)
+        setSelectedOrder(null)
+      } catch (error: unknown) {
+        const err = error as { response?: { data?: { message?: string } } }
+        showToast(err?.response?.data?.message || 'Order return failed', 'error')
+        throw error
+      }
+    })
   }
 
 
   return (
-    <div className='min-h-screen p-6 bg-gradient-to-br from-black via-gray-900 to-black text-white'>
-      <div className='max-w-6xl mx-auto'>
-        <div className='mb-6 flex items-center justify-between'>
-          <div>
-            <h1 className='text-2xl font-bold'>My Orders</h1>
-            <p className='text-sm text-gray-300'>All orders placed by you</p>
-          </div>
-          <div className='text-sm text-gray-300'>
-            {orders.length} Orders
-          </div>
+    <div className='app-container'>
+      <div className='mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between'>
+        <div>
+          <h1 className='section-title'>My Orders</h1>
+          <p className='section-subtitle'>All orders placed by you</p>
         </div>
+        <div className='text-sm text-gray-400'>{orders.length} orders</div>
+      </div>
 
         {/* large devices */}
-        <div className='hidden lg:block bg-white/5 border border-white/10 rounded-xl overflow-auto shadow-xl shadow-black/40'>
+        <div className='hidden lg:block glass-card overflow-auto'>
         <table className='w-full text-left'>
           <thead className='text-xs bg-white/5 border-b border-white/10 text-gray-300 uppercase tracking-wider'>
           <tr>
@@ -174,7 +192,7 @@ function Orders() {
               <tr 
               key={index}
               className='border-t border-white/5 hover:bg-white/10 transition-all duration-200'>
-                <td className='px-4 py-4 text-sm'>#{String(order._id).slice(-8)}</td>
+                <td className='px-4 py-4 text-sm'>{getOrderDisplayId(order)}</td>
                 <td className='px-4 py-4 text-sm'>{formatDate(String(order.createdAt))}</td>
                 <td className='px-4 py-4 text-sm'>{order.products.map((p,i)=>(
                   <div key={i} className='text-gray-200'>{p.product.title} * {p.quantity}</div>
@@ -254,11 +272,11 @@ function Orders() {
             animate={{scale:1,opacity:1}}
             transition={{duration:0.4}}
             key={index}
-            className='bg-white/5 border border-white/10 p-4 rounded'
+            className='glass-card p-4'
             >
               <div className='flex justify-between'>
                 <div>
-                  <div className='text-sm text-gray-300'>#{String(order._id).slice(-8)}</div>
+                  <div className='text-sm text-gray-300'>{getOrderDisplayId(order)}</div>
                   <div className='font-semibold'>{formatDate(String(order.createdAt))}</div>
                   <div className='text-sm text-gray-300 mt-1'>{order.productVendor.shopName}</div>
                 </div>
@@ -331,14 +349,13 @@ function Orders() {
           initial={{scale:0.95,opacity:0}}
           animate={{scale:1,opacity:1}}
           transition={{duration:0.4}}
-          className='text-xl text-center  text-gray-600 bg-white/5 border border-white/10 p-4 rounded-xl '>
+          className='glass-card p-6 text-center text-gray-400'>
             No Orders found
           </motion.div>
           
       }
         </div>
 
-      </div>
       {selectedOrder && (
         <div className='fixed inset-0 z-50 flex items-center justify-center p-4'>
           <motion.div
@@ -347,7 +364,7 @@ function Orders() {
           transition={{duration:0.4}}
           className='relative z-10 w-full max-w-3xl bg-[#061526] border border-white/10 p-6 rounded-xl shadow-xl shadow-black/40'
           >
-            <h2 className='text-lg font-semibold'>#{String(selectedOrder._id).slice(-8)}</h2>
+            <h2 className='text-lg font-semibold'>{getOrderDisplayId(selectedOrder)}</h2>
             <p className='text-sm text-gray-300'>{formatDate(String(selectedOrder.createdAt))}</p>
             <hr className='my-4 border-white/10'/>
             <h3 className='font-semibold mb-2'>Product</h3>
@@ -371,22 +388,48 @@ function Orders() {
             <div className='text-sm space-y-1'>
               <div className='flex justify-between'>
                 <span>Product Total</span>
-                <span>{selectedOrder.productsTotal}</span>
+                <span>{formatINR(selectedOrder.productsTotal)}</span>
               </div>
               <div className='flex justify-between'>
                 <span>Delivery Charge</span>
-                <span>{selectedOrder.deliveryCharge}</span>
+                <span>{formatINR(selectedOrder.deliveryCharge)}</span>
               </div>
               <div className='flex justify-between'>
                 <span>Service Charge</span>
-                <span>{selectedOrder.serviceCharge}</span>
+                <span>{formatINR(selectedOrder.serviceCharge)}</span>
               </div>
+              {(selectedOrder.couponDiscount ?? 0) > 0 && (
+                <div className='flex justify-between text-emerald-400'>
+                  <span>Coupon ({selectedOrder.couponCode})</span>
+                  <span>− {formatINR(selectedOrder.couponDiscount)}</span>
+                </div>
+              )}
               </div>
               <hr className='my-4 border-white/10'/>
               <div className='flex justify-between font-semibold text-green-300'>
-                <span>Final Total</span>
-                <span>₹ {selectedOrder.totalAmount}</span>
+                <span>You paid</span>
+                <span>{formatINR(selectedOrder.totalAmount)}</span>
               </div>
+
+              {(() => {
+                const s = getOrderSettlement(selectedOrder)
+                return (
+                  <div className='mt-4 rounded-lg bg-white/5 p-3 text-xs space-y-1 text-gray-400'>
+                    <p className='font-medium text-gray-300 mb-2'>Settlement breakdown</p>
+                    <div className='flex justify-between'><span>Vendor receives</span><span>{formatINR(s.vendorPayout)}</span></div>
+                    <div className='flex justify-between'><span>Platform commission</span><span>{formatINR(s.platformCommissionNet)}</span></div>
+                    <div className='flex justify-between'><span>Platform fees (delivery + service)</span><span>{formatINR(s.platformFeesKept)}</span></div>
+                    {selectedOrder.orderStatus === 'returned' && (
+                      <>
+                        <hr className='my-2 border-white/10'/>
+                        <div className='flex justify-between text-orange-400'><span>Refunded to you</span><span>{formatINR(s.customerRefund)}</span></div>
+                        <div className='flex justify-between'><span>Commission reversed</span><span>{formatINR(s.refundedCommission)}</span></div>
+                        <p className='text-[10px] mt-1'>Delivery & service charges are not refunded.</p>
+                      </>
+                    )}
+                  </div>
+                )
+              })()}
 
               {selectedOrder.orderStatus==="delivered" && 
               selectedOrder.deliveryDate && (
@@ -414,12 +457,12 @@ function Orders() {
               </ul>
             </div>
             )}
-            <div className='mt-6 flex flex-col sm:flex-row justify-end gap-3'>
+            <div className='mt-6 flex flex-col sm:flex-row justify-end gap-3 flex-wrap'>
               <button 
               onClick={()=>setSelectedOrder(null)}
               className='px-4 py-2 bg-white/10 rounded'
               >
-                Cancel
+                Close
               </button>
               <button 
                     disabled={selectedOrder.orderStatus==="delivered"}
@@ -435,62 +478,63 @@ function Orders() {
                       {selectedOrder.orderStatus==="delivered" ? "Delivered" : "Track Order"}
                       </button>
               {selectedOrder.orderStatus!=="delivered" ? (<button
-              disabled={isCancelDisable(selectedOrder)}
-              onClick={()=>handleCancel(selectedOrder._id)}
-              className={`px-4 py-2 rounded 
-                ${isCancelDisable(selectedOrder)
+              disabled={isCancelDisable(selectedOrder) || isBusy(`cancel-${String(selectedOrder._id)}`)}
+              onClick={()=>handleCancel(String(selectedOrder._id))}
+              className={`px-4 py-2 rounded flex items-center justify-center gap-2
+                ${isCancelDisable(selectedOrder) || isBusy(`cancel-${String(selectedOrder._id)}`)
 
                   ?"bg-white/10 text-gray-400 cursor-not-allowed"
                   :"bg-red-600 hover:bg-red-700"
                 }`}
               >
-                Cancel Order
-              </button>):(
-                selectedOrder.products.map((p:any,i:number)=>{
-                  const replacementDays=p.product.replacementDays||0;
-                  const eligible=isEligibleReturn(selectedOrder.deliveryDate,replacementDays);
-                  const remaining=remainingDays(selectedOrder.deliveryDate,replacementDays);
-                  const returnEndDate=ReturnDate(selectedOrder.deliveryDate,replacementDays);
-                  return(
-                    <div
-                    key={i}
-                    className='flex md:flex-row flex-col justify-between items-center bg-white/5 px-3 py-2 rounded ml-2'
-                    >
-                      <div>
-                        <p className='text-xs text-gray-300'>
-                          {p.product?.title}
+                {isBusy(`cancel-${String(selectedOrder._id)}`) ? (
+                  <ClipLoader size={16} color="white" />
+                ) : (
+                  "Cancel Order"
+                )}
+              </button>):(() => {
+                const replacementDays = getMaxReplacementDays(selectedOrder)
+                const eligible = isEligibleReturn(selectedOrder.deliveryDate, replacementDays)
+                const remaining = remainingDays(selectedOrder.deliveryDate, replacementDays)
+                const returnEndDate = ReturnDate(selectedOrder.deliveryDate, replacementDays)
+                return (
+                  <div className="ml-2 space-y-2">
+                    {selectedOrder.products.map((p: any, i: number) => (
+                      <div
+                        key={i}
+                        className="flex flex-col justify-between rounded bg-white/5 px-3 py-2 md:flex-row md:items-center"
+                      >
+                        <p className="text-xs text-gray-300">{p.product?.title}</p>
+                      </div>
+                    ))}
+                    {eligible ? (
+                      <div className="rounded bg-white/5 px-3 py-3">
+                        <p className="text-xs text-yellow-400">
+                          Return available for {remaining} day{remaining > 1 ? 's' : ''}
                         </p>
-                        {eligible ? (
-                          <>
-                          <p className='text-xs text-yellow-400'>
-                            Return available for {remaining} day
-                            {remaining > 1 ? "s" :""}
-                          </p>
-                          {returnEndDate && (
-                            <p className='text-[11px] text-gray-400'>
-                              Return till: {" "}
-                              {returnEndDate.toLocaleDateString("en-IN")}
-                            </p>
-                          )}
-                          </>
-                        ):(
-                          <p className='text-xs text-red-400'>
-                            Return window closed
+                        {returnEndDate && (
+                          <p className="text-[11px] text-gray-400">
+                            Return till: {returnEndDate.toLocaleDateString('en-IN')}
                           </p>
                         )}
-                      </div>
-                      {eligible && (
                         <button
-                        className='mx-3 px-3 py-1 bg-yellow-600 rounded text-sm'
-                        onClick={()=>returnOrder(selectedOrder._id)}
+                          className="mt-2 flex items-center gap-2 rounded bg-yellow-600 px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={isBusy(`return-${String(selectedOrder._id)}`)}
+                          onClick={() => returnOrder(String(selectedOrder._id))}
                         >
-                          Return
+                          {isBusy(`return-${String(selectedOrder._id)}`) ? (
+                            <ClipLoader size={14} color="white" />
+                          ) : (
+                            'Return Order'
+                          )}
                         </button>
-                      )}
-                    </div>
-                  )
-                })
-              )}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-red-400">Return window closed</p>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
           </motion.div>
         </div>

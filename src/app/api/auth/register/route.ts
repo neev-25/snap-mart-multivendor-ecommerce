@@ -27,7 +27,8 @@ export async function POST(req:NextRequest) {
         password:hashPassword
     })
     return NextResponse.json({
-        user,
+        message:"User registered",
+        user:{ _id:user._id, name:user.name, email:user.email, role:user.role },
     },{status:201})
     } catch (error) {
     return NextResponse.json({

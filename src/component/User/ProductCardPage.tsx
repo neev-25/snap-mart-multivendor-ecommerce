@@ -1,45 +1,37 @@
+import { IProduct } from '@/model/product.model'
 import { RootState } from '@/redux/store'
 import React from 'react'
 import { useSelector } from 'react-redux'
-import ProductCard from '../ProductCard';
+import ProductCard from '../ProductCard'
+import PageHeader from '@/component/ui/PageHeader'
+import EmptyState from '@/component/ui/EmptyState'
 
 function ProductCardPage() {
-    const {allProductsData}=useSelector((state:RootState)=>state.vendor)
-    const products=Array.isArray(allProductsData)?
-    allProductsData.filter((p:any)=>p.isActive===true && 
-    p.verificationStatus==="approved"):[]
-    console.log(products)
-
-    if(!products || products.length===0)
-    {
-      return (
-          <div className='min-h-[30vh] flex items-center justify-center text-white bg-black'>
-              No Products Found
-          </div>
+  const { allProductsData } = useSelector((state: RootState) => state.vendor)
+  const products = Array.isArray(allProductsData)
+    ? allProductsData.filter(
+        (p: { isActive?: boolean; verificationStatus?: string }) =>
+          p.isActive === true && p.verificationStatus === 'approved'
       )
-    }
+    : []
+
   return (
-    <div className='min-h-screen w-full bg-linear-to-br from-gray-900 via-black to-gray-900 px-4 py-6'>
-      <div className='max-w-7xl mx-auto mb-13 text-center'>
-        <h1 className='text-2xl sm:text-3xl font-bold text-white'>
-            Explore Verified & Trending Products
-        </h1>
-        <p className='text-sm text-gray-200'>Shop only from approved sellers with guaranteed quality</p>
-      </div>
-      <div className='max-w-7xl mx-auto'>
-        {products.length===0 ? (
-            <div className='text-center text-gray-500 mt-20'>
-                No Products available right now.
-            </div>
-        ):(
-            <div className='grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4'>
-                {products.map((p:any)=>(
-                    <ProductCard key={p._id} product={p}/>
-                ))}
-            </div>
-        )}
-      </div>
-    </div>
+    <section className="app-container py-8 sm:py-12">
+      <PageHeader
+        title="Trending Products"
+        subtitle="Shop from approved sellers with guaranteed quality"
+        centered
+      />
+      {!products.length ? (
+        <EmptyState title="No products available" description="Check back soon for new listings." />
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 lg:gap-5">
+          {products.map((p: IProduct) => (
+            <ProductCard key={String(p._id)} product={p} />
+          ))}
+        </div>
+      )}
+    </section>
   )
 }
 

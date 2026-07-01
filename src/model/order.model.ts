@@ -4,6 +4,7 @@ import { IUser } from './user.model';
 
 export interface IOrder{
     _id?:mongoose.Types.ObjectId;
+    orderNumber?:string;
     products:{
         product:IProduct;
         quantity:number;
@@ -17,6 +18,11 @@ export interface IOrder{
     deliveryCharge:number;
     serviceCharge:number;
     totalAmount:number;
+    platformCommission?:number;
+    vendorEarning?:number;
+    couponCode?:string;
+    couponDiscount?:number;
+    commissionPercent?:number;
 
     paymentMethod:"cod"|"stripe";
     isPaid:boolean;
@@ -32,6 +38,9 @@ export interface IOrder{
     cancelledAt?:Date;
 
     returnedAmount?:number;
+    returnedAt?:Date;
+    refundedCommission?:number;
+    refundedVendorAmount?:number;
 
     address:{
         name:string;
@@ -53,6 +62,12 @@ export interface IOrder{
 
 }
 const orderSchema=new mongoose.Schema<IOrder>({
+    orderNumber:{
+        type:String,
+        unique:true,
+        sparse:true,
+        index:true,
+    },
     products:[
         {
             product:{
@@ -96,6 +111,25 @@ const orderSchema=new mongoose.Schema<IOrder>({
         type:Number,
         requried:true,
     },
+    platformCommission:{
+        type:Number,
+        default:0,
+    },
+    vendorEarning:{
+        type:Number,
+        default:0,
+    },
+    couponCode:{
+        type:String,
+    },
+    couponDiscount:{
+        type:Number,
+        default:0,
+    },
+    commissionPercent:{
+        type:Number,
+        default:0,
+    },
     paymentMethod:{
         type:String,
         enum:["cod","stripe"],
@@ -121,6 +155,17 @@ const orderSchema=new mongoose.Schema<IOrder>({
         type:Date,
     },
     returnedAmount:{
+        type:Number,
+        default:0,
+    },
+    returnedAt:{
+        type:Date,
+    },
+    refundedCommission:{
+        type:Number,
+        default:0,
+    },
+    refundedVendorAmount:{
         type:Number,
         default:0,
     },

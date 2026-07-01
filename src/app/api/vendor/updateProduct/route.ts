@@ -1,8 +1,8 @@
 import { auth } from "@/auth";
 import uploadOnCloudinary from "@/lib/cloudinary";
 import connectDb from "@/lib/connectDB";
-import Product from "@/model/product.model";
-import { NextRequest, NextResponse } from "next/server";
+import { validateCommissionPercent } from "@/lib/commissionUtils";
+import Product from "@/model/product.model";import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req:NextRequest) {
     try {
@@ -32,6 +32,7 @@ export async function POST(req:NextRequest) {
         const freeDelivery=formData.get("freeDelivery")==="true";
         const warranty=formData.get("warranty") as string || "No Warranty";
         const payOnDelivery=formData.get("payOnDelivery")==="true";
+        const vendorCommissionPercent=Number(formData.get("vendorCommissionPercent"));
         const detailsPoints=formData.getAll("detailsPoints");
         const img1=formData.get("image1") as Blob|null;
         const img2=formData.get("image2") as Blob|null;
@@ -63,27 +64,70 @@ export async function POST(req:NextRequest) {
         {
             return NextResponse.json({message:"Sizes aare required for wearable product"},{status:400})
         }
-        const updatedProduct=await Product.findByIdAndUpdate(productId,{
+
+        const commissionError = validateCommissionPercent(vendorCommissionPercent);
+        if (commissionError) {
+            return NextResponse.json({ message: commissionError }, { status: 400 });
+        }
+
+        const commissionChanged =
+            product.agreedCommissionPercent != null &&
+            vendorCommissionPercent !== product.agreedCommissionPercent;
+
+        const updatePayload: Record<string, unknown> = {
             title,
             description,
             price,
             stock,
-            isStockAvailable:stock>0,
+            isStockAvailable: stock > 0,
             image1,
             image2,
             image3,
             image4,
             category,
             isWearable,
-            sizes:isWearable?sizes:[],
+            sizes: isWearable ? sizes : [],
             replacementDays,
             warranty,
             payOnDelivery,
             freeDelivery,
             detailsPoints,
-            verificationStatus:"pending",
-            isActive:false
-        },{new:true})
+            vendorCommissionPercent,
+            adminCounterCommissionPercent: undefined,
+            agreedCommissionPercent: commissionChanged ? undefined : product.agreedCommissionPercent,
+            commissionStatus: commissionChanged ? "pending" : product.commissionStatus || "pending",
+            verificationStatus: "pending",
+            isActive: false,
+            requestedAt: new Date(),
+        };
+
+        if (product.verificationStatus === "approved" || product.approvedAt) {
+            updatePayload.lastApprovedSnapshot = {
+                title: product.title,
+                description: product.description,
+                price: product.price,
+                stock: product.stock,
+                category: product.category,
+                freeDelivery: product.freeDelivery,
+                payOnDelivery: product.payOnDelivery,
+                warranty: product.warranty,
+                replacementDays: product.replacementDays,
+                isWearable: product.isWearable,
+                sizes: product.sizes,
+                detailsPoints: product.detailsPoints,
+                image1: product.image1,
+            };
+            updatePayload.isUpdateRequest = true;
+        }
+
+        const updatedProduct = await Product.findByIdAndUpdate(productId, updatePayload, { new: true });
+
+        if (commissionChanged) {
+            await Product.findByIdAndUpdate(productId, {
+                $unset: { adminCounterCommissionPercent: "" },
+            });
+        }
+
         return NextResponse.json(updatedProduct,{status:200})
 
     } catch (error) {

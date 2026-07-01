@@ -1,6 +1,7 @@
 'use client'
 import axios from 'axios';
 import { AnimatePresence, motion } from 'motion/react'
+import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react'
 import { AiOutlineShop, AiOutlineTool, AiOutlineUser } from 'react-icons/ai';
@@ -9,6 +10,7 @@ import { ClipLoader } from 'react-spinners';
 const EditRoleandPhone = () => {
     const [role,setRole]=useState<string>("")
     const [phone,setPhone]=useState<string>("")
+    const { update: updateSession } = useSession()
 
    const roles = [
   { label: "Admin", value: "admin", icon: <AiOutlineTool size={40} /> },
@@ -39,16 +41,26 @@ const handleSubmit=async (e:React.FormEvent<HTMLFormElement>)=>{
         alert("please select the role and enter the phone number")
         return;
     }
+    if (!/^\d{10}$/.test(phone)) {
+        alert("Please enter a valid 10-digit mobile number")
+        return;
+    }
     setLoading(true)
     try{
         const result=await axios.post("/api/user/edit-role-phone",{role,phone})
-        console.log(result.data)
+        await updateSession({ role: result.data.user.role })
         setLoading(false)
+        router.refresh()
         router.push("/")
-    }catch(error)
+    }catch(error: unknown)
     {
         console.log(error)
         setLoading(false)
+        const msg =
+          axios.isAxiosError(error) && error.response?.data?.message
+            ? String(error.response.data.message)
+            : "Could not save role. Please try again."
+        alert(msg)
     }
 
 }
@@ -70,12 +82,14 @@ const handleSubmit=async (e:React.FormEvent<HTMLFormElement>)=>{
         className='flex flex-col gap-8'
         >
             <input 
-            type="text"
+            type="tel"
+            inputMode="numeric"
             placeholder='Enter Your Mobile Number'
             maxLength={10}
+            pattern="\d{10}"
             required
             className='bg-white/10 border border-white/30 rounded-lg p-4 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 '
-            onChange={(e)=>setPhone(e.target.value)}
+            onChange={(e)=>setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
             value={phone}
             />
 

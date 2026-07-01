@@ -1,24 +1,37 @@
 'use client'
 import UseGetAllProducts from '@/hooks/UseGetAllProductsData';
 import { IProduct } from '@/model/product.model';
-import { RootState } from '@/redux/store';
+import { AppDispatch, RootState } from '@/redux/store'
+import { setAllProductsData } from '@/redux/vendorSlice';
+import { addWishlistItem, removeWishlistItem, setWishlistIds } from '@/redux/userSlice';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation'
 import React, { useState } from 'react'
-import { FaRegStar, FaStar, FaUserCircle } from 'react-icons/fa';
-import { useSelector } from 'react-redux';
+import { FaHeart, FaRegHeart, FaRegStar, FaStar, FaUserCircle } from 'react-icons/fa';
+import { useDispatch, useSelector } from 'react-redux';
 import { motion } from 'motion/react';
 import ProductCard from '@/component/ProductCard';
 import axios from 'axios';
 import { ClipLoader } from 'react-spinners';
+import { useSession } from 'next-auth/react';
+import { useActionLock } from '@/hooks/useActionLock';
+import { showToast } from '@/component/ui/ToastProvider';
+import PriceComparePanel from '@/component/ml/PriceComparePanel';
 
 function ViewProduct() {
     const params=useParams()
     const productId=params.id as string;
     UseGetAllProducts()
     const {allProductsData}=useSelector((state:RootState)=>state.vendor)
+    const userData = useSelector((state: RootState) => state.user.userData)
+    const wishlistIds = useSelector((state: RootState) => state.user.wishlistIds)
+    const dispatch = useDispatch<AppDispatch>()
     const router=useRouter()
+    const { status } = useSession()
+    const { busy: addingToCart, run: runAddToCart } = useActionLock()
     const product:IProduct|undefined=allProductsData?.find((p:IProduct)=>String(p._id)===String(productId))
+    const inWishlist = product ? wishlistIds.includes(String(product._id)) : false
+    const canUseWishlist = userData?.role === 'user'
 
     const images:string[]=[
         product?.image1,
@@ -28,26 +41,64 @@ function ViewProduct() {
     ].filter((img):img is string => Boolean(img))
 // const totalReviews:number=product?.reviews?.length || 0;
 const totalReviews: number = product?.reviews?.length ?? 0;
-const avgRating=product && totalReviews>0 ? (
-    product.reviews!.reduce((sum:number,r:{rating:number})=>sum+r.rating,0)/totalReviews).toFixed(1):0
+const avgRating = product && totalReviews > 0
+  ? Number((product.reviews!.reduce((sum, r) => sum + (r.rating ?? 0), 0) / totalReviews).toFixed(1))
+  : 0
 
 
     const handleAddtoCart=async (e:React.MouseEvent)=>{
     e.stopPropagation()
-    try {
-        const result=await axios.post("/api/user/cart/add",{
+    if (status !== 'authenticated') {
+      router.push(`/login?callbackUrl=${encodeURIComponent(`/viewProduct/${productId}`)}`)
+      return
+    }
+    await runAddToCart(async () => {
+      try {
+        await axios.post("/api/user/cart/add",{
             productId:productId,
             quantity:1
         })
-        console.log(result.data)
-        alert("✅ Added to cart")
+        showToast("Added to cart")
         router.push("/cart")
-    } catch (error) {
-
-        console.log(error)
-        alert("add to cart error")
-    }
+      } catch (error: unknown) {
+        const err = error as { response?: { data?: { message?: string } } }
+        showToast(err?.response?.data?.message || "Could not add to cart", "error")
+        throw error
+      }
+    })
 }
+
+    const toggleWishlist = async () => {
+        if (!product?._id) return
+        if (status !== 'authenticated') {
+            router.push(`/login?callbackUrl=${encodeURIComponent(`/viewProduct/${productId}`)}`)
+            return
+        }
+        if (!canUseWishlist) {
+            showToast('Wishlist is available for customer accounts only', 'error')
+            return
+        }
+        const id = String(product._id)
+        try {
+            if (inWishlist) {
+                const res = await axios.post('/api/user/wishlist/remove', { productId: id })
+                dispatch(removeWishlistItem(id))
+                if (res.data.wishlistIds) dispatch(setWishlistIds(res.data.wishlistIds))
+            } else {
+                const res = await axios.post('/api/user/wishlist/add', { productId: id })
+                dispatch(addWishlistItem(res.data.product || product))
+                if (res.data.wishlistIds) dispatch(setWishlistIds(res.data.wishlistIds))
+            }
+        } catch (error: unknown) {
+            const err = error as { response?: { data?: { message?: string }; status?: number } }
+            if (err?.response?.status === 401) {
+                router.push(`/login?callbackUrl=${encodeURIComponent(`/viewProduct/${productId}`)}`)
+            } else {
+                showToast(err?.response?.data?.message || 'Could not update wishlist', 'error')
+            }
+        }
+    }
+
 const relatedProducts=allProductsData.filter((p)=>p.category === product?.category && p._id!==product._id)
     const[activeImage,setActiveImage]=useState(0);
     const [reviewRating,setReviewRating]=useState(0);
@@ -67,9 +118,11 @@ const relatedProducts=allProductsData.filter((p)=>p.category === product?.catego
         }
         setLoading(true)
         try {
-            const result=await axios.post("/api/vendor/addReview",formData)
+            await axios.post("/api/vendor/addReview",formData)
+            const refreshed = await axios.get("/api/vendor/allProduct")
+            dispatch(setAllProductsData(refreshed.data))
             setLoading(false)
-            alert("✅ Review Added SuccessFully");
+            showToast("Review added successfully")
             setPreview(null)
             setReviewComment("")
             setReviewRating(0)
@@ -77,19 +130,24 @@ const relatedProducts=allProductsData.filter((p)=>p.category === product?.catego
         } catch (error) {
             console.log(error)
             setLoading(false)
-            alert("❌ Review Added Failed");
+            showToast("Could not add review", "error")
         }
     }
 
 
   return (
-    <div className='min-h-screen bg-linear-to-br from-gray-900 via-black to-gray-900 px-4 py-10'>
+    <div className='app-container'>
+        {!product && allProductsData ? (
+          <div className="flex min-h-[40vh] items-center justify-center text-gray-400">
+            Product not found or no longer available.
+          </div>
+        ) : (
         <div className='max-w-6xl mx-auto'>
-            <div className='grid grid-cols-1 md:grid-cols-2 gap-10'>
+            <div className='grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-10'>
                 {/* left top */}
                 <div className='flex flex-col lg:flex-row gap-4'>
                     {/* main image */}
-                    <div className='relative w-full lg:w-[450px] h-[420px] bg-white rounded-lg overflow-hidden flex items-center justify-center border border-white/10'>
+                    <div className='relative w-full aspect-square max-h-[420px] lg:max-w-[450px] bg-white rounded-2xl overflow-hidden flex items-center justify-center border border-white/10'>
                     {images.length>0 && images[activeImage] && <Image 
                     src={images[activeImage]}
                     alt={product?.title ?? "product image"}
@@ -131,14 +189,27 @@ const relatedProducts=allProductsData.filter((p)=>p.category === product?.catego
                             {product?.stock>0 ? "In Stock":"Out of Stock"}
                         </span>
                     </p>
+                    <div className='flex gap-3 mt-2'>
                     <motion.button
                     onClick={handleAddtoCart}
+                    disabled={addingToCart}
+                    whileHover={addingToCart ? undefined : {scale:1.02}}
+                    whileTap={addingToCart ? undefined : {scale:0.97}}
+                    className='text-white flex-1 btn-primary py-3 font-semibold disabled:cursor-not-allowed disabled:opacity-60 flex items-center justify-center gap-2'
+                    >
+                        {addingToCart ? <ClipLoader size={18} color="white" /> : 'Add to Cart'}
+                    </motion.button>
+                    <motion.button
+                    type="button"
+                    onClick={toggleWishlist}
                     whileHover={{scale:1.02}}
                     whileTap={{scale:0.97}}
-                    className='text-white w-full bg-blue-600 hover:bg-blue-700 py-3 rounded font-semibold transition'
+                    className='px-4 py-3 rounded font-semibold border border-white/20 bg-white/10 text-red-400 hover:bg-white/20 transition'
+                    aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
                     >
-                        Add to Cart
+                        {inWishlist ? <FaHeart size={20} /> : <FaRegHeart size={20} />}
                     </motion.button>
+                    </div>
                 </div>}
             </div>
 
@@ -184,15 +255,20 @@ const relatedProducts=allProductsData.filter((p)=>p.category === product?.catego
 
             </div>}
 
+            {product && (
+              <div className="mt-8">
+                <PriceComparePanel productId={String(product._id)} />
+              </div>
+            )}
+
             {Array.isArray(relatedProducts) && relatedProducts.length>0 && (
                 <div className='mt-12'>
-                    <h3 className='text-2xl font-bold mb-5 text-white'>Reload Products</h3>
+                    <h3 className='text-2xl font-bold mb-5 text-white'>Related Products</h3>
                     <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-5'>
                         {relatedProducts.slice(0,8).map((rp)=>(
                         <ProductCard key={rp._id?.toString()} product={rp}/>
                     ))}
                     </div>
-                    
                 </div>
             )}
             <div className='mt-16 bg-white/5 border-white/10 rounded-lg p-6'>
@@ -285,6 +361,7 @@ const relatedProducts=allProductsData.filter((p)=>p.category === product?.catego
                 </div>
             </div> 
         </div>
+        )}
     </div>
   )
 }

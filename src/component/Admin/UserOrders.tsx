@@ -1,6 +1,7 @@
 "use client"
-import { AppDispatch, RootState } from '@/redux/store'
-import React, { useState } from 'react'
+import { getOrderDisplayId } from '@/lib/orderDisplay'
+import { RootState } from '@/redux/store'
+import React from 'react'
 import { useSelector } from 'react-redux'
 import UseGetAllOrdersData from '@/hooks/UseGetAllOrdersData';
 
@@ -61,7 +62,7 @@ return (
               key={index}
               className='border-t border-white/10 hover:bg-white/5'
               >
-                <td className='p-4'>#{String(order._id)!.slice(-8)}</td>
+                <td className='p-4'>{getOrderDisplayId(order)}</td>
                 <td className='p-4'>{order.address.name}
                   <div className='text-xs text-gray-400'>
                     {order.address.phone}
@@ -136,7 +137,7 @@ return (
           allOrdersData.map((order,index)=>(
             <div key={index} className='bg-white/10 border border-white/20 rounded-xl p-4 space-y-2'>
              <div className='flex justify-between mb-2'>
-              <span className='text-sm'>#{String(order._id)!.slice(-8)}</span>
+              <span className='text-sm'>{getOrderDisplayId(order)}</span>
               <span className='text-green-400 font-bold'>₹ {order.totalAmount}</span>
              </div>
              <p className='text-sm'>

@@ -36,6 +36,31 @@ payOnDelivery?:boolean;
 
 detailsPoints:string[];
 
+visualEmbeddings?: number[][];
+visualIndexedAt?: Date;
+
+lastApprovedSnapshot?:{
+    title?:string;
+    description?:string;
+    price?:number;
+    stock?:number;
+    category?:string;
+    freeDelivery?:boolean;
+    payOnDelivery?:boolean;
+    warranty?:string;
+    replacementDays?:number;
+    isWearable?:boolean;
+    sizes?:string[];
+    detailsPoints?:string[];
+    image1?:string;
+};
+isUpdateRequest?:boolean;
+
+vendorCommissionPercent?:number;
+adminCounterCommissionPercent?:number;
+agreedCommissionPercent?:number;
+commissionStatus?:"pending"|"admin_countered"|"agreed";
+
 reviews?:{
     user:IUser;
     // rating?:string;
@@ -141,6 +166,35 @@ const productSchema=new mongoose.Schema<IProduct>({
         type:[String],
         default:[],
     },
+    visualEmbeddings:{ type:[[Number]] },
+    visualIndexedAt:{ type:Date },
+    lastApprovedSnapshot:{
+        type:mongoose.Schema.Types.Mixed,
+    },
+    isUpdateRequest:{
+        type:Boolean,
+        default:false,
+    },
+    vendorCommissionPercent:{
+        type:Number,
+        min:0,
+        max:100,
+    },
+    adminCounterCommissionPercent:{
+        type:Number,
+        min:0,
+        max:100,
+    },
+    agreedCommissionPercent:{
+        type:Number,
+        min:0,
+        max:100,
+    },
+    commissionStatus:{
+        type:String,
+        enum:["pending","admin_countered","agreed"],
+        default:"pending",
+    },
     reviews:[
         {
             user:{
@@ -168,5 +222,10 @@ const productSchema=new mongoose.Schema<IProduct>({
         },
     ],   
 },{timestamps:true})
+
+if (process.env.NODE_ENV === "development" && mongoose.models?.Product) {
+  mongoose.deleteModel("Product");
+}
+
 const Product=mongoose.models?.Product || mongoose.model<IProduct>("Product",productSchema);
 export default Product; 

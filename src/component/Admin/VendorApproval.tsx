@@ -55,17 +55,25 @@ const handleRejected=async () => {
   if(!selectedVendor)
   return;
 
+  if(!rejectedReason.trim())
+  {
+    alert("Please enter a rejection reason")
+    return;
+  }
+
   setLoading(true)
   try {
     
     await axios.post("/api/admin/update-vendor-status",{
       vendorId:selectedVendor._id,
       status:"rejected",
-      rejectedReason
+      rejectedReason:rejectedReason.trim()
     })
     const updated=allVendorData.filter((v)=>v._id!==selectedVendor._id)
     dispatch(setAllVendorData(updated))
     setSelectedVendor(null)
+    setRejectModel(false)
+    setRejectedReason("")
     setLoading(false)
     alert("Vendor Rejected")
   } catch (error) {
@@ -208,7 +216,7 @@ const handleRejected=async () => {
           value={rejectedReason}
           />
           <div className='flex flex-col sm:flex-row gap-3 mt-6'>
-            <button disabled={loading} onClick={()=>{handleRejected;setRejectModel(false)}} className='flex-1 bg-red-600 hover:bg-red-700 py-2 rounded-lg text-sm'>{loading ? <ClipLoader size={20} color='white'/>:"Confirm Reject"}</button>
+            <button disabled={loading} onClick={handleRejected} className='flex-1 bg-red-600 hover:bg-red-700 py-2 rounded-lg text-sm'>{loading ? <ClipLoader size={20} color='white'/>:"Confirm Reject"}</button>
             <button onClick={()=>setRejectModel(false)} className='flex-1 bg-gray-600 hover:bg-gray-700 py-2 rounded-lg text-sm'>Cancel</button>
           </div>
             

@@ -29,8 +29,6 @@ const productId=params.id as string;
 const {allProductsData}=useSelector((state:RootState)=>state.vendor)
 
 const product=allProductsData?.find((p)=>String(p._id)===String(productId))
-console.log(product)
-
 
 const [title,setTitle]=useState("")
 const [description,setDescription]=useState("")
@@ -43,7 +41,8 @@ const [sizes,setSizes]=useState<string[]>([])
 const [replacementDays,setReplacementDays]=useState("")
 const [warranty,setWarranty]=useState("")
 const [freeDelivery,setFreeDelivery]=useState(false)
-const [payOnDelivery,setPayOnDelivery]=useState(false)
+const [payOnDelivery,setPayOnDelivery]=useState(true)
+const [vendorCommissionPercent,setVendorCommissionPercent]=useState("5")
 const [image1,setImage1]=useState<File|null>(null);
 const [image2,setImage2]=useState<File|null>(null);
 const [image3,setImage3]=useState<File|null>(null);
@@ -81,7 +80,10 @@ useEffect(()=>{
         );
         setFreeDelivery(Boolean(product.freeDelivery));
         setWarranty(product.warranty || "");
-        setPayOnDelivery(Boolean(product.payOnDelivery));
+        setPayOnDelivery(product.payOnDelivery !== false);
+        setVendorCommissionPercent(
+          String(product.vendorCommissionPercent ?? product.agreedCommissionPercent ?? 5)
+        );
 
         setDetailPoints(product.detailsPoints || []);
         setPointIndex(product.detailsPoints?.length || 0);
@@ -139,7 +141,8 @@ formData.append("replacementDays", replacementDays);
 formData.append("freeDelivery", String(freeDelivery));
 formData.append("warranty", warranty);
 formData.append("payOnDelivery", String(payOnDelivery));
-detailPoints.forEach((point) => 
+formData.append("vendorCommissionPercent", vendorCommissionPercent);
+detailPoints.forEach((point) =>
   formData.append("detailsPoints", point)
 );
 
@@ -193,7 +196,12 @@ if(image1 && image2 && image3 && image4)
             onChange={(e)=>setStock(e.target.value)}
             value={stock}
             />
-            <select className='focus:outline-none focus:ring-2 focus:ring-blue-500 p-3 bg-white/10 border border-white/20 rounded text-white'
+            <input type="number" min={5} max={40} className='focus:outline-none focus:ring-2 focus:ring-blue-500 p-3 bg-white/10 border border-white/20 rounded' 
+            placeholder='Platform commission % (min 5)'
+            onChange={(e)=>setVendorCommissionPercent(e.target.value)}
+            value={vendorCommissionPercent}
+            />
+            <select className='focus:outline-none focus:ring-2 focus:ring-blue-500 p-3 bg-white/10 border border-white/20 rounded text-white sm:col-span-2'
             onChange={(e)=>setCategory(e.target.value)}
             value={category}
             >

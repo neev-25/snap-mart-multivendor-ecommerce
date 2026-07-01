@@ -1,52 +1,57 @@
-import connectDb from "@/lib/connectDB";
-import Product from "@/model/product.model";
-import { NextRequest, NextResponse } from "next/server";
-
-export async function GET(req:NextRequest){
-    try {
-        await connectDb();
-        const {searchParams}=new URL(req.url)
-        const query=searchParams.get("query")||"";
-        const category=searchParams.get("category");
-        const shop=searchParams.get("shop");
-
-        const filter:any={
-            isActive:true,
-            verificationStatus:"approved",
-        }
-        if(query)
-        {
-            filter.$or=[
-                {title:{$regex:query,$options:"i"}},
-                {description:{$regex:query,$options:"i"}},
-                {category:{$regex:query,$options:"i"}},
-            ];
-        }
-
-        if(category && category!=="all")
-        {
-            filter.category=category;
-        }
-        if(shop && shop!=="all")
-        {
-            filter.vendor=shop;
-        }
-
-        const products=await Product.find(filter)
-        return NextResponse.json(
-            {
-                success:true,
-                count:products.length,
-                products,
-            },
-            {status:200}
-        );
-
-
-    }
-    catch(error)
-    {
-        return NextResponse.json({message:`failed to find product in category section ${error}`},{status:500})
-    }
-    
-}
+import connectDb from "@/lib/connectDB";
+import Product from "@/model/product.model";
+import { NextRequest, NextResponse } from "next/server";
+
+export async function GET(req:NextRequest){
+    try {
+        await connectDb();
+        const {searchParams}=new URL(req.url)
+        const query=searchParams.get("query")||"";
+        const category=searchParams.get("category");
+        const shop=searchParams.get("shop");
+
+        const filter: Record<string, unknown> = {
+            isActive:true,
+            verificationStatus:"approved",
+        }
+        if(query)
+        {
+            filter.$or=[
+                {title:{$regex:query,$options:"i"}},
+                {description:{$regex:query,$options:"i"}},
+                {category:{$regex:query,$options:"i"}},
+            ];
+        }
+
+        if(category && category!=="all")
+        {
+            filter.category=category;
+        }
+        if(shop && shop!=="all")
+        {
+            filter.vendor=shop;
+        }
+
+        const products=await Product.find(filter)
+            .populate("vendor","name email shopName")
+            .populate({
+                path:"reviews.user",select:"name email image"
+            })
+            .sort({createdAt:-1})
+        return NextResponse.json(
+            {
+                success:true,
+                count:products.length,
+                products,
+            },
+            {status:200}
+        );
+
+
+    }
+    catch(error)
+    {
+        return NextResponse.json({message:`failed to find product in category section ${error}`},{status:500})
+    }
+    
+}
