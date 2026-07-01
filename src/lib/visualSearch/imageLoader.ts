@@ -24,7 +24,10 @@ export async function loadRawImageForClip(source: string | Blob) {
 
 export async function configureTransformersEnv() {
   const { env } = await import("@xenova/transformers");
-  env.cacheDir = "./.cache/transformers";
+  env.cacheDir =
+    process.env.TRANSFORMERS_CACHE ||
+    (process.env.VERCEL ? "/tmp/transformers" : "./.cache/transformers");
   env.allowLocalModels = true;
+  env.useBrowserCache = false;
   env.backends.onnx.wasm.numThreads = 1;
 }

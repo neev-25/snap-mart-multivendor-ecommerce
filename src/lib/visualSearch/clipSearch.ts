@@ -18,13 +18,8 @@ export type VisualSearchResponse = {
 };
 
 const MODEL_ID = "Xenova/clip-vit-base-patch32";
-
-/** Minimum cosine similarity to count as a real visual match (catalog-trained gate) */
 const MIN_SIMILARITY = 0.72;
-/** Max score drop from best match when showing related items in same category */
 const RELATED_SCORE_GAP = 0.08;
-/** Zero-shot category must reach this to trust category filter */
-const MIN_CATEGORY_CONFIDENCE = 0.1;
 
 const embeddingCache = new Map<string, number[]>();
 
@@ -33,13 +28,7 @@ type FeatureExtractor = (
   options?: { pooling?: string; normalize?: boolean }
 ) => Promise<{ data: Float32Array | number[] }>;
 
-type ZeroShotClassifier = (
-  input: unknown,
-  labels: string[]
-) => Promise<Array<{ label: string; score: number }>>;
-
 let extractorPromise: Promise<FeatureExtractor> | null = null;
-let zeroShotPromise: Promise<ZeroShotClassifier> | null = null;
 
 async function getExtractor(): Promise<FeatureExtractor> {
   if (!extractorPromise) {
@@ -54,30 +43,13 @@ async function getExtractor(): Promise<FeatureExtractor> {
   return extractorPromise;
 }
 
-async function getZeroShotClassifier(): Promise<ZeroShotClassifier> {
-  if (!zeroShotPromise) {
-    zeroShotPromise = (async () => {
-      await configureTransformersEnv();
-      const { pipeline } = await import("@xenova/transformers");
-      return pipeline("zero-shot-image-classification", MODEL_ID, {
-        quantized: true,
-      }) as Promise<ZeroShotClassifier>;
-    })();
-  }
-  return zeroShotPromise;
-}
-
-async function loadRawImage(source: string | Blob) {
-  return loadRawImageForClip(source);
-}
-
 export async function embedProductImage(imageUrl: string): Promise<number[]> {
   if (embeddingCache.has(imageUrl)) {
     return embeddingCache.get(imageUrl)!;
   }
 
   const extractor = await getExtractor();
-  const image = await loadRawImage(imageUrl);
+  const image = await loadRawImageForClip(imageUrl);
   const output = await extractor(image, { pooling: "mean", normalize: true });
   const vector = normalizeVector(Array.from(output.data as Float32Array));
   embeddingCache.set(imageUrl, vector);
@@ -108,25 +80,7 @@ function bestSimilarityAcrossImages(
   return best;
 }
 
-async function embedUpload(file: Blob): Promise<number[]> {
-  const extractor = await getExtractor();
-  const image = await loadRawImage(file);
-  const output = await extractor(image, { pooling: "mean", normalize: true });
-  return normalizeVector(Array.from(output.data as Float32Array));
-}
-
-async function classifyCatalogCategory(
-  file: Blob,
-  categories: string[]
-): Promise<Array<{ label: string; score: number }>> {
-  if (!categories.length) return [];
-  const classifier = await getZeroShotClassifier();
-  const image = await loadRawImage(file);
-  const results = await classifier(image, categories);
-  return results.sort((a, b) => b.score - a.score);
-}
-
-type CatalogProduct = {
+export type CatalogProduct = {
   _id: unknown;
   title?: string;
   category?: string;
@@ -138,11 +92,12 @@ type CatalogProduct = {
   [key: string]: unknown;
 };
 
-export async function visualSearchInCatalog(
-  file: Blob,
+/** Compare a query vector against pre-indexed catalog embeddings (no ML on server). */
+export function searchCatalogByEmbedding(
+  queryEmbedding: number[],
   products: CatalogProduct[],
   limit = 8
-): Promise<VisualSearchResponse> {
+): VisualSearchResponse {
   const indexed = products.filter(
     (p) =>
       p.visualEmbeddings?.length &&
@@ -155,14 +110,11 @@ export async function visualSearchInCatalog(
     return {
       found: false,
       products: [],
-      message: "No product images indexed in catalog yet. Add active products first.",
+      message:
+        "No indexed products yet. Active approved products are indexed when vendors enable them.",
       model: MODEL_ID,
     };
   }
-
-  const categories = [...new Set(indexed.map((p) => p.category as string))];
-  const categoryPredictions = await classifyCatalogCategory(file, categories);
-  const queryEmbedding = await embedUpload(file);
 
   const scored: VisualSearchResult[] = [];
   for (const product of indexed) {
@@ -187,41 +139,13 @@ export async function visualSearchInCatalog(
       products: [],
       message: "No similar products found in SnapMart catalog for this image.",
       topScore: best?.score,
-      detectedCategory: categoryPredictions[0]?.label,
+      detectedCategory: best?.category,
       model: MODEL_ID,
     };
   }
 
-  let targetCategory = best.category;
-
-  const zeroShotTop = categoryPredictions[0];
-  if (zeroShotTop && zeroShotTop.score >= MIN_CATEGORY_CONFIDENCE) {
-    const inTop3 = categoryPredictions
-      .slice(0, 3)
-      .some((c) => c.label === best.category);
-    if (inTop3) {
-      targetCategory = best.category;
-    } else if (zeroShotTop.score >= 0.18) {
-      targetCategory = zeroShotTop.label;
-    }
-  }
-
-  const bestInTarget = scored.find(
-    (s) => s.category === targetCategory && s.score >= MIN_SIMILARITY
-  );
-
-  if (!bestInTarget) {
-    return {
-      found: false,
-      products: [],
-      message: `No matching products found in category "${targetCategory}".`,
-      detectedCategory: targetCategory,
-      topScore: best.score,
-      model: MODEL_ID,
-    };
-  }
-
-  const floor = Math.max(MIN_SIMILARITY, bestInTarget.score - RELATED_SCORE_GAP);
+  const targetCategory = best.category;
+  const floor = Math.max(MIN_SIMILARITY, best.score - RELATED_SCORE_GAP);
 
   const related = scored.filter(
     (s) =>
@@ -235,9 +159,21 @@ export async function visualSearchInCatalog(
     products: related.slice(0, limit),
     message: `Found ${related.length} related product(s) in ${targetCategory}.`,
     detectedCategory: targetCategory,
-    topScore: bestInTarget.score,
+    topScore: best.score,
     model: MODEL_ID,
   };
+}
+
+export async function visualSearchInCatalog(
+  file: Blob,
+  products: CatalogProduct[],
+  limit = 8
+): Promise<VisualSearchResponse> {
+  const extractor = await getExtractor();
+  const image = await loadRawImageForClip(file);
+  const output = await extractor(image, { pooling: "mean", normalize: true });
+  const queryEmbedding = normalizeVector(Array.from(output.data as Float32Array));
+  return searchCatalogByEmbedding(queryEmbedding, products, limit);
 }
 
 export function getVisualSearchModelName() {

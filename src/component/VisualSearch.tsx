@@ -1,12 +1,14 @@
 'use client'
 
 import ProductCard from '@/component/ProductCard';
+import { embedImageInBrowser } from '@/lib/visualSearch/browserEmbed';
 import axios from 'axios';
 import React, { useState } from 'react';
 import { FaCamera } from 'react-icons/fa';
 
 export default function VisualSearch() {
   const [loading, setLoading] = useState(false);
+  const [loadingHint, setLoadingHint] = useState('');
   const [products, setProducts] = useState<any[]>([]);
   const [statusMessage, setStatusMessage] = useState('');
   const [searched, setSearched] = useState(false);
@@ -18,19 +20,30 @@ export default function VisualSearch() {
     setProducts([]);
     setStatusMessage('');
     setSearched(false);
+    setLoadingHint('Loading AI model (first time ~50MB, cached after)...');
+
     try {
-      const form = new FormData();
-      form.append('image', file);
-      const res = await axios.post('/api/visual-search', form);
+      const embedding = await embedImageInBrowser(file);
+      setLoadingHint('Searching catalog...');
+
+      const res = await axios.post('/api/visual-search', { embedding });
       setSearched(true);
       setProducts(res.data.products || []);
       setStatusMessage(res.data.message || '');
-    } catch {
+    } catch (err: unknown) {
       setProducts([]);
-      setStatusMessage('Visual search failed. First run downloads the CLIP model (one time).');
       setSearched(true);
+      const axiosMsg =
+        axios.isAxiosError(err) && err.response?.data?.message
+          ? String(err.response.data.message)
+          : null;
+      setStatusMessage(
+        axiosMsg ||
+          (err instanceof Error ? err.message : 'Visual search failed. Try another image.')
+      );
     } finally {
       setLoading(false);
+      setLoadingHint('');
       e.target.value = '';
     }
   };
@@ -55,10 +68,8 @@ export default function VisualSearch() {
         </label>
       </div>
 
-      {loading && (
-        <p className="mt-3 text-xs text-violet-300">
-          Indexing catalog and running similarity search...
-        </p>
+      {loading && loadingHint && (
+        <p className="mt-3 text-xs text-violet-300">{loadingHint}</p>
       )}
 
       {statusMessage && !loading && (
