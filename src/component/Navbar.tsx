@@ -21,16 +21,20 @@ import {
 import { GoListUnordered } from 'react-icons/go'
 import { AiOutlineHeart } from 'react-icons/ai'
 import { AnimatePresence, motion } from 'motion/react'
-import { signOut } from 'next-auth/react'
+import { signOut, useSession } from 'next-auth/react'
 
 function Navbar({ user }: { user: IUser | null }) {
   const router = useRouter()
   const pathname = usePathname()
+  const { status, data: session } = useSession()
   const [openMenu, setOpenMenu] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
-  const isGuest = !user?._id
-  const isCustomer = user?.role === 'user'
+  const isAuthLoading = status === 'loading'
+  const isAuthenticated = status === 'authenticated'
+  const isGuest = !isAuthenticated && !isAuthLoading
+  const role = user?.role ?? session?.user?.role
+  const isCustomer = isAuthenticated && role === 'user'
 
   const browseLinks = [
     { label: 'Home', path: '/', icon: AiOutlineHome },
@@ -89,7 +93,9 @@ function Navbar({ user }: { user: IUser | null }) {
             <IconBtn Icon={AiOutlinePhone} onClick={() => router.push('/support')} label="Support" />
           )}
 
-          {isGuest ? (
+          {isAuthLoading ? (
+            <div className="ml-1 h-9 w-9 animate-pulse rounded-full bg-white/10" aria-hidden />
+          ) : isGuest ? (
             <>
               <button type="button" onClick={() => goLogin()} className="btn-secondary px-4 py-2 text-sm">
                 Sign in
@@ -131,14 +137,6 @@ function Navbar({ user }: { user: IUser | null }) {
                       }}
                     />
                     <DropDownBtn
-                      Icon={AiOutlineLogin}
-                      label="Sign In"
-                      onClick={() => {
-                        goLogin()
-                        setOpenMenu(false)
-                      }}
-                    />
-                    <DropDownBtn
                       Icon={AiOutlineLogout}
                       label="Sign Out"
                       onClick={() => {
@@ -156,7 +154,9 @@ function Navbar({ user }: { user: IUser | null }) {
         </div>
 
         <div className="flex items-center gap-3 md:hidden">
-          {isGuest ? (
+          {isAuthLoading ? (
+            <div className="h-4 w-14 animate-pulse rounded bg-white/10" aria-hidden />
+          ) : isGuest ? (
             <button type="button" onClick={() => goLogin()} className="text-sm font-medium text-blue-400">
               Sign in
             </button>
@@ -235,14 +235,6 @@ function Navbar({ user }: { user: IUser | null }) {
                       active={pathname === '/profile'}
                       onClick={() => {
                         router.push('/profile')
-                        setSidebarOpen(false)
-                      }}
-                    />
-                    <SideBarBtn
-                      label="Sign In"
-                      Icon={AiOutlineLogin}
-                      onClick={() => {
-                        goLogin()
                         setSidebarOpen(false)
                       }}
                     />

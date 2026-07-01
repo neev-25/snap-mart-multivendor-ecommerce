@@ -8,12 +8,12 @@ import { useDispatch } from 'react-redux'
 
 function UseGetCurrentUser() {
   const dispatch = useDispatch<AppDispatch>()
-  const { status } = useSession()
+  const { data: session, status } = useSession()
 
   useEffect(() => {
     if (status === 'loading') return
 
-    if (status !== 'authenticated') {
+    if (status !== 'authenticated' || !session?.user?.id) {
       dispatch(setUserData(null))
       return
     }
@@ -29,7 +29,7 @@ function UseGetCurrentUser() {
     }
 
     fetchUser()
-  }, [status, dispatch])
+  }, [status, session?.user?.id, dispatch])
 }
 
 export default UseGetCurrentUser

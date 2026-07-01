@@ -5,6 +5,7 @@ import {
   visualSearchInCatalog,
 } from "@/lib/visualSearch/clipSearch";
 import Product from "@/model/product.model";
+import "@/model/user.model";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";

@@ -29,6 +29,7 @@ const SignIn = () => {
         return
       }
       showToast('Signed in successfully')
+      router.refresh()
       router.push(callbackUrl)
     } catch (error) {
       console.log(error)

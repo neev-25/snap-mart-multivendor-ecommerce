@@ -1,3 +1,4 @@
+import "@/lib/registerModels";
 import mongoose from "mongoose";
 
 type MongooseCache = {
